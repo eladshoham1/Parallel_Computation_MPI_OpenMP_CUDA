@@ -31,9 +31,9 @@ void printHistogram(int *counters, int size)
 
 void histogramOpenMpReduction(int* numbers, int* histogram, int size)
 {
-#pragma omp parallel for //reduction (+: histogram)
+#pragma omp parallel for //reduction(+: histogram)
 	for (int i = 0; i < size; i++)
-		histogram[numbers[i]]++;
+		localHistog[numbers[i]]++;
 }
 
 void histogramOpenMpPrivate(int* numbers, int** histograms, int size)

@@ -2,7 +2,7 @@
 #define __FUNCTIONS_H__
 
 enum ranks { ROOT, WORKER };
-enum size { N = 256, BUFFER_SIZE = 1024 * 1024 };
+enum size { N = 256, BUFFER_SIZE = 1024 };
     
 int* readNumbers(int* size);
 void printHistogram(int* counters, int size);
