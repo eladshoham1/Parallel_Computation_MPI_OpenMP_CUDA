@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "functions.h"
+#include "cFunctions.h"
 
 int* readNumbers(int* size)
 {
@@ -29,19 +29,26 @@ void printHistogram(int *counters, int size)
     } 
 }
 
-void calculateHistogramOpenMp(int* numbers, int* counters, int size)
+void histogramOpenMpReduction(int* numbers, int* histogram, int size)
+{
+#pragma omp parallel for //reduction (+: histogram)
+	for (int i = 0; i < size; i++)
+		histogram[numbers[i]]++;
+}
+
+void histogramOpenMpPrivate(int* numbers, int** histograms, int size)
 {
 #pragma omp parallel for
     for (int i = 0; i < size; i++)
-        counters[numbers[i]]++;
+        histograms[omp_get_thread_num()][numbers[i]]++;
 }
 
-void mergeHistogram(int* masterCounters, int* workerCounters, int size)
+void mergeHistogram(int* masterHistogram, int* workerHistogram, int size)
 {
     int i;
 
     for (i = 0; i < size; i++)
-        masterCounters[i] += workerCounters[i];
+        masterHistogram[i] += workerHistogram[i];
 }
 
 void* doMalloc(unsigned int nbytes) 

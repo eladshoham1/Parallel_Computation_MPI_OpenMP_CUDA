@@ -1,54 +1,62 @@
 #include <cuda_runtime.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <iostream>
+using namespace std;
 
-#include "myProto.h"
+#include "cudaFunctions.h"
 
 enum size { THREADS_PER_BLOCK = 256 };
 
-__global__ void myKernel(int* numbers, int* tempCounters, int size)
+__global__ void calculateHistogram(int* numbers, int* histogram, int size)
 {
-  //__shared__ int *counters;
-  int i = blockDim.x * blockIdx.x + threadIdx.x;
+    __shared__ int privateHistogram[THREADS_PER_BLOCK];
+    int id = threadIdx.x;
 
-  if (i < size)
-      tempCounters[i]++;
+    if (id < size)
+        privateHistogram[id]++;
+        
+    __syncthreads();
 }
 
-int computeOnGPU(int* numbers, int* tempCounters, int size)
+void checkStatus(cudaError_t cudaStatus, int* numbers, std::string err)
 {
-  cudaError_t err = cudaSuccess;
-  int *numbersOnGpu, blocksPerGrid = (size + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+    if (cudaStatus != cudaSuccess)
+    {
+        delete[] numbers;
+        cout << err << endl;
+        exit(EXIT_FAILURE);
+    }
+}
 
-  err = cudaMalloc((void **)&numbersOnGpu, size * sizeof(int));
-  if (err != cudaSuccess) {
-      fprintf(stderr, "Failed to allocate device memory - %s\n", cudaGetErrorString(err));
-      exit(EXIT_FAILURE);
-  }
+int calculateHistogramCuda(int* numbers, int* histogram, int size)
+{
+    int *numbersGpu, *histogramGpu;
+    int blocksPerGrid = (size + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+    cudaError_t cudaStatus;
 
-  err = cudaMemcpy(numbersOnGpu, numbers, size, cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) {
-      fprintf(stderr, "Failed to copy data from host to device - %s\n", cudaGetErrorString(err));
-      exit(EXIT_FAILURE);
-  }
+    cudaStatus = cudaMalloc((void **)&numbersGpu, size * sizeof(int));
+    checkStatus(cudaStatus, numbersGpu, "Cuda malloc failed!");
 
-  myKernel<<<blocksPerGrid, THREADS_PER_BLOCK>>>(numbers, tempCounters, size);
-  err = cudaGetLastError();
-  if (err != cudaSuccess) {
-      fprintf(stderr, "Failed to launch vectorAdd kernel -  %s\n", cudaGetErrorString(err));
-      exit(EXIT_FAILURE);
-  }
+    cudaStatus = cudaMalloc((void **)&histogramGpu, THREADS_PER_BLOCK * sizeof(int));
+    checkStatus(cudaStatus, numbersGpu, "Cuda malloc failed!");
 
-  err = cudaMemcpy(numbers, numbersOnGpu, size, cudaMemcpyDeviceToHost);
-  if (err != cudaSuccess) {
-      fprintf(stderr, "Failed to copy result array from device to host -%s\n", cudaGetErrorString(err));
-      exit(EXIT_FAILURE);
-  }
+    cudaStatus = cudaMemcpy(numbersGpu, numbers, size, cudaMemcpyHostToDevice);
+    checkStatus(cudaStatus, numbersGpu, "Cuda memcpy failed!");
 
-  if (cudaFree(numbersOnGpu) != cudaSuccess) {
-      fprintf(stderr, "Failed to free device data - %s\n", cudaGetErrorString(err));
-      exit(EXIT_FAILURE);
-  }
+    cudaStatus = cudaMemcpy(histogramGpu, histogram, THREADS_PER_BLOCK, cudaMemcpyHostToDevice);
+    checkStatus(cudaStatus, numbersGpu, "Cuda memcpy failed!");
+    
+    calculateHistogram<<<blocksPerGrid, THREADS_PER_BLOCK>>>(numbers, histogram, size);
+    cudaStatus = cudaDeviceSynchronize();
+    checkStatus(cudaStatus, numbersGpu, "Cuda kernel failed!");
 
-  return EXIT_SUCCESS;
+    cudaStatus = cudaMemcpy(histogram, histogramGpu, THREADS_PER_BLOCK, cudaMemcpyDeviceToHost);
+    checkStatus(cudaStatus, numbersGpu, "Cuda memcpy failed!");
+
+    cudaStatus = cudaFree(numbersGpu);
+    checkStatus(cudaStatus, numbersGpu, "Cuda free failed!");
+
+    cudaStatus = cudaFree(histogramGpu);
+    checkStatus(cudaStatus, numbersGpu, "Cuda free failed!");
+
+    return EXIT_SUCCESS;
 }
