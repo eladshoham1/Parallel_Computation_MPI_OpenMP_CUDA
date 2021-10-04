@@ -29,20 +29,6 @@ void printHistogram(int *counters, int size)
     } 
 }
 
-void histogramOpenMpReduction(int* numbers, int* histogram, int size)
-{
-#pragma omp parallel for //reduction(+: histogram)
-	for (int i = 0; i < size; i++)
-		localHistog[numbers[i]]++;
-}
-
-void histogramOpenMpPrivate(int* numbers, int** histograms, int size)
-{
-#pragma omp parallel for
-    for (int i = 0; i < size; i++)
-        histograms[omp_get_thread_num()][numbers[i]]++;
-}
-
 void mergeHistogram(int* masterHistogram, int* workerHistogram, int size)
 {
     int i;

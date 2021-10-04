@@ -17,8 +17,6 @@ int main(int argc, char *argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &numProcs);
 
-    omp_set_num_threads(4);
-
     if (rank == ROOT)
     {
         if (numProcs != 2) {
@@ -33,7 +31,9 @@ int main(int argc, char *argv[])
         MPI_Pack(numbers + halfSize + size % 2, halfSize, MPI_INT, buff, BUFFER_SIZE, &position, MPI_COMM_WORLD);
         MPI_Send(buff, position, MPI_PACKED, WORKER ,0 ,MPI_COMM_WORLD);
 
-        histogramOpenMpReduction(numbers, histogram, halfSize + size % 2);
+        #pragma omp parallel for reduction(+: histogram)
+            for (int i = 0; i < halfSize + size % 2; i++)
+                histogram[numbers[i]]++;
 
         MPI_Recv(workerHistogram, N, MPI_INT, WORKER, 0, MPI_COMM_WORLD, &status);
         mergeHistogram(histogram, workerHistogram, N);
@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        int **histograms, i, quarterSize, numOfThreads = omp_get_max_threads();
+        int **histograms, i, quarterSize, numOfThreads;
         int cudaHistogram[N] = { 0 };
 
         MPI_Recv(buff, BUFFER_SIZE, MPI_PACKED, ROOT, 0, MPI_COMM_WORLD, &status);
@@ -51,6 +51,12 @@ int main(int argc, char *argv[])
 
         quarterSize = halfSize / 2 + halfSize % 2;
 
+        #pragma omp parallel
+        {
+            #pragma omp single
+                numOfThreads = omp_get_num_threads();
+        }
+
         histograms = (int**)doMalloc(numOfThreads * sizeof(int*));
         for (i = 0; i < numOfThreads; i++)
         {
@@ -58,8 +64,10 @@ int main(int argc, char *argv[])
             if (!histograms[i])
                 MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
         }
-        
-        histogramOpenMpPrivate(numbers, histograms, quarterSize);
+
+        #pragma omp parallel for
+            for (int i = 0; i < quarterSize; i++)
+                histograms[omp_get_thread_num()][numbers[i]]++;
 
         for (i = 0; i < numOfThreads; i++)
             mergeHistogram(workerHistogram, histograms[i], N);
