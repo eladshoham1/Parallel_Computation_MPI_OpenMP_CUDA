@@ -9,14 +9,16 @@ __global__ void calculateHistogram(int* numbers, int* histogram, int size)
     __shared__ int sharedHistogram[N];
     int id = blockIdx.x * blockDim.x + threadIdx.x;
 
-    sharedHistogram[threadIdx.x] = 0;
+    if (threadIdx.x < N)
+        sharedHistogram[threadIdx.x] = 0;
     __syncthreads();
 
     if (id < size)
         atomicAdd(&sharedHistogram[numbers[id]], 1);
     __syncthreads();
 
-    atomicAdd(&histogram[threadIdx.x], sharedHistogram[threadIdx.x]);
+    if (threadIdx.x < N)
+        histogram[threadIdx.x] = sharedHistogram[threadIdx.x];
 }
 
 void checkStatus(cudaError_t cudaStatus, int* numbers, int* histogram, string err)
@@ -34,7 +36,7 @@ int calculateHistogramCuda(int* numbers, int* histogram, int size)
 {
     int *devNumbers = 0, *devHistogram = 0;
     int threadsPerBlock = N;
-    int blocksPerGrid = (size + threadsPerBlock) / threadsPerBlock;
+    int blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
     cudaError_t cudaStatus;
 
     cudaStatus = cudaMalloc((void**)&devNumbers, size * sizeof(int));
@@ -45,7 +47,7 @@ int calculateHistogramCuda(int* numbers, int* histogram, int size)
 
     cudaStatus = cudaMemcpy(devNumbers, numbers, size, cudaMemcpyHostToDevice);
     checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda memcpy failed!");
-    
+    cout << "blocksPerGrid " << blocksPerGrid << " threadsPerBlock " << threadsPerBlock << " size " << size << endl;
     calculateHistogram<<<blocksPerGrid, threadsPerBlock>>>(devNumbers, devHistogram, size);
     cudaStatus = cudaDeviceSynchronize();
     checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda kernel failed!");
