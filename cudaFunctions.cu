@@ -1,45 +1,38 @@
 #include <cuda_runtime.h>
+#include <helper_cuda.h>
 #include <iostream>
 using namespace std;
 
 #include "cudaFunctions.h"
 
-__global__ void fillHistogramByZero(int* histogram, int size)
-{
-    int id = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (id >= size)
-        return;
-    
-    histogram[id] = 0;
-}
-
 __global__ void calculateHistogram(int* numbers, int* histogram, int size)
 {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     __shared__ int sharedHistogram[N];
-
+    
     sharedHistogram[threadIdx.x] = 0;
     __syncthreads();
 
-    if (id >= size)
-        return;
-
-    atomicAdd(&sharedHistogram[numbers[id]], 1);
+    if (id < size)
+        atomicAdd(&(sharedHistogram[numbers[id]]), 1);
     __syncthreads();
 
     atomicAdd(&histogram[threadIdx.x], sharedHistogram[threadIdx.x]);
 }
 
-void checkStatus(cudaError_t cudaStatus, int* numbers, int* histogram, string err)
+int checkStatus(cudaError_t cudaStatus, int* numbers, int* histogram, string err)
 {
     if (cudaStatus != cudaSuccess)
     {
         cout << err << endl;
+
         cudaFree(numbers);
         cudaFree(histogram);
-        exit(EXIT_FAILURE);
+
+        return EXIT_FAILURE;
     }
+
+    return EXIT_SUCCESS;
 }
 
 int calculateHistogramCuda(int* numbers, int* histogram, int size)
@@ -50,30 +43,37 @@ int calculateHistogramCuda(int* numbers, int* histogram, int size)
     cudaError_t cudaStatus;
 
     cudaStatus = cudaMalloc((void**)&devNumbers, size * sizeof(int));
-    checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda malloc failed!");
+    if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda malloc failed!") == EXIT_FAILURE)
+        return EXIT_FAILURE;
 
     cudaStatus = cudaMalloc((void**)&devHistogram, threadsPerBlock * sizeof(int));
-    checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda malloc failed!");
+    if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda malloc failed!") == EXIT_FAILURE)
+        return EXIT_FAILURE;
 
     cudaStatus = cudaMemcpy(devNumbers, numbers, size, cudaMemcpyHostToDevice);
-    checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda memcpy failed!");
+    if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda memcpy failed!") == EXIT_FAILURE)
+        return EXIT_FAILURE;
 
-    fillHistogramByZero<<<blocksPerGrid, threadsPerBlock>>>(devHistogram, N);
-    cudaStatus = cudaDeviceSynchronize();
-    checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda kernel failed!");
+    cudaStatus = cudaMemset(devHistogram, 0, N * sizeof(int));
+    if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda memset failed!") == EXIT_FAILURE)
+        return EXIT_FAILURE;
 
     calculateHistogram<<<blocksPerGrid, threadsPerBlock>>>(devNumbers, devHistogram, size);
     cudaStatus = cudaDeviceSynchronize();
-    checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda kernel failed!");
+    if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda kernel failed!") == EXIT_FAILURE)
+        return EXIT_FAILURE;
 
     cudaStatus = cudaMemcpy(histogram, devHistogram, threadsPerBlock, cudaMemcpyDeviceToHost);
-    checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda memcpy failed!");
+    if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda memcpy failed!") == EXIT_FAILURE)
+        return EXIT_FAILURE;
 
     cudaStatus = cudaFree(devNumbers);
-    checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda free failed!");
+    if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda free failed!") == EXIT_FAILURE)
+        return EXIT_FAILURE;
 
     cudaStatus = cudaFree(devHistogram);
-    checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda free failed!");
+    if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda free failed!") == EXIT_FAILURE)
+        return EXIT_FAILURE;
 
     return EXIT_SUCCESS;
 }
