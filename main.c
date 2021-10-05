@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 
         MPI_Recv(workerHistogram, N, MPI_INT, WORKER, 0, MPI_COMM_WORLD, &status);
         mergeHistogram(histogram, workerHistogram, N);
-        //printHistogram(histogram, N);
+        // printHistogram(histogram, N);
     }
     else
     {
@@ -74,9 +74,8 @@ int main(int argc, char *argv[])
 
         if (calculateHistogramCuda(numbers + quarterSize, cudaHistogram, quarterSize) != 0)
             MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-        mergeHistogram(workerHistogram, cudaHistogram, N);
-
         printHistogram(cudaHistogram, N);
+        mergeHistogram(workerHistogram, cudaHistogram, N);
 
         MPI_Send(workerHistogram, N, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
 
