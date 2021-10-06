@@ -50,7 +50,7 @@ int calculateHistogramCuda(int* numbers, int* histogram, int size)
     if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda malloc failed!") == EXIT_FAILURE)
         return EXIT_FAILURE;
 
-    cudaStatus = cudaMemcpy(devNumbers, numbers, size, cudaMemcpyHostToDevice);
+    cudaStatus = cudaMemcpy(devNumbers, numbers, size * sizeof(int), cudaMemcpyHostToDevice);
     if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda memcpy failed!") == EXIT_FAILURE)
         return EXIT_FAILURE;
 
@@ -63,7 +63,7 @@ int calculateHistogramCuda(int* numbers, int* histogram, int size)
     if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda kernel failed!") == EXIT_FAILURE)
         return EXIT_FAILURE;
 
-    cudaStatus = cudaMemcpy(histogram, devHistogram, threadsPerBlock, cudaMemcpyDeviceToHost);
+    cudaStatus = cudaMemcpy(histogram, devHistogram, threadsPerBlock * sizeof(int), cudaMemcpyDeviceToHost);
     if (checkStatus(cudaStatus, devNumbers, devHistogram, "Cuda memcpy failed!") == EXIT_FAILURE)
         return EXIT_FAILURE;
 

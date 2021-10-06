@@ -11,7 +11,6 @@ int main(int argc, char *argv[])
     int *numbers, histogram[N] = { 0 }, workerHistogram[N] = { 0 };
     int size, halfSize, rank, numProcs, position = 0;
     char buff[BUFFER_SIZE];
-    MPI_Status status;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -35,25 +34,21 @@ int main(int argc, char *argv[])
             for (int i = 0; i < halfSize + size % 2; i++)
                 histogram[numbers[i]]++;
 
-        MPI_Recv(workerHistogram, N, MPI_INT, WORKER, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(workerHistogram, N, MPI_INT, WORKER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         mergeHistogram(histogram, workerHistogram, N);
         printHistogram(histogram, N);
-        /*int sum = 0;
-        for (int i = 0; i < N; i++)
-            sum += histogram[i];
-        printf("sum = %d\n", sum);*/
     }
     else
     {
         int **histograms, i, quarterSize, numOfThreads;
         int cudaHistogram[N] = { 0 };
 
-        MPI_Recv(buff, BUFFER_SIZE, MPI_PACKED, ROOT, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(buff, BUFFER_SIZE, MPI_PACKED, ROOT, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Unpack(buff, BUFFER_SIZE, &position, &halfSize, 1, MPI_INT, MPI_COMM_WORLD);
         numbers = (int*)doMalloc(halfSize * sizeof(int));
         MPI_Unpack(buff, BUFFER_SIZE, &position, numbers, halfSize, MPI_INT, MPI_COMM_WORLD);
 
-        quarterSize = halfSize / 2 + halfSize % 2;
+        quarterSize = halfSize / 2;
 
         #pragma omp parallel
         {
@@ -70,13 +65,13 @@ int main(int argc, char *argv[])
         }
 
         #pragma omp parallel for
-            for (int i = 0; i < quarterSize; i++)
+            for (int i = 0; i < quarterSize + halfSize % 2; i++)
                 histograms[omp_get_thread_num()][numbers[i]]++;
 
         for (i = 0; i < numOfThreads; i++)
             mergeHistogram(workerHistogram, histograms[i], N);
 
-        if (calculateHistogramCuda(numbers + quarterSize, cudaHistogram, quarterSize) != 0)
+        if (calculateHistogramCuda(numbers + quarterSize + halfSize % 2, cudaHistogram, quarterSize) != EXIT_SUCCESS)
             MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
         mergeHistogram(workerHistogram, cudaHistogram, N);
 
@@ -89,5 +84,5 @@ int main(int argc, char *argv[])
 
     free(numbers);
     MPI_Finalize();
-    return 0;
+    return EXIT_SUCCESS;
 }
